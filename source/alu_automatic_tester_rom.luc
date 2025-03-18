@@ -1,0 +1,241 @@
+module alu_automatic_tester_rom #(
+    TEST_CASES = 10) // default
+(
+    input addr[TEST_CASES],  // Address to select test case
+    output a[32],     // Operand A
+    output b[32],     // Operand B
+    output alufn[6],  // ALU function code
+    output expected_out[35] // Expected output (includes ZVN flags)
+) {
+    const A = {
+        // Adder Test Cases (8)
+        32b00000000000000000000000000000000, // Adder test 1: Addition of Zeros
+        32b00000000000000000110001001000000, // Adder test 2: Larger Number Addition
+        32b01111111111111111111111111111111, // Adder test 3: Addition with Overflow (Positive)
+        32b11111111111111111111111111111111, // Adder test 4: Addition of Maximum Values
+        32b00000000000000000000000000000000, // Adder test 5: Subtraction of Zeros
+        32b00000000000000000000000000000010, // Adder test 6: Subtraction with Negative Result
+        32b10000000000000000000000000000000, // Adder test 7: Subtraction with Underflow
+        32b10000000000000000000000000000000, // Adder test 8: Subtraction of Minimum Values
+        
+        // Compare Test Cases (12)
+        32b10000000000000000000000000000000, // Compare test 1: Negative A and Negative B
+        32b10000000000000000000000000000000,
+        32b10000000000000000000000000000000, 
+        32b10000000000000000000000000000000, // Compare test 2: Negative A and Positive B
+        32b10000000000000000000000000000000,
+        32b10000000000000000000000000000000,
+        32b01111111111111111111111111111111, // Compare test 3: Largest Positive A and B
+        32b01111111111111111111111111111111,
+        32b01111111111111111111111111111111,
+        32b00000000000000000000000000000000, // Compare test 4: Two Zero Values
+        32b00000000000000000000000000000000,
+        32b00000000000000000000000000000000,
+        
+        // Boolean Test Cases (12)
+        32b10101010101010101010101010101010, // Boolean test 1: AND Operation
+        32b11001100110011001100110011001100, // Boolean test 2: OR Operation
+        32b10101010101010101010101010101010, // Boolean test 3: XOR Operation
+        32b10101010101010101010101010101010, // Boolean test 4: "A" Operation
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b10101010101010101010101010101010, // Boolean Edge case test 2: Mixed Bits
+        32b10101010101010101010101010101010, // Boolean Edge case test 2: Mixed Bits
+        32b10101010101010101010101010101010, // Boolean Edge case test 2: Mixed Bits
+        32b10101010101010101010101010101010, // Boolean Edge case test 2: Mixed Bits
+        
+        // Shifter Test Cases (9)
+        32b00000000000000000000000000000001, // Shifter test 1: Shift left by 31 bits
+        32b00000000000000000000000000000001, // Shifter test 2: Shift left by 0 bits
+        32b11111111111111111111111111111111, // Shifter test 3: All ones shifted left by 1
+        32b11011110101011011011111011101111, // Shifter test 4: Shift right by 0 bits
+        32b10000000000000000000000000000000, // Shifter test 5: Shift right by 31 bits
+        32b11111111111111111111111111111111, // Shifter test 6: Logical shift right by 16 bits
+        32b10000000000000000000000000000000, // Shifter test 7: Arithmetic right shift by 1
+        32b01111111111111111111111111111111, // Shifter test 8: Positive number shifts right by 1
+        32b11111111111111111111111111111111, // Shifter test 9: Negative stays all ones after large shift
+        
+        // Multiplier Test Cases (5)
+        32b00000000000000000000000000000000, // Multiplier test 1: 0 × anything
+        32b00000000000000000000000000000001, // Multiplier test 2: 1 × number
+        32b00000000000000000000000000000010, // Multiplier test 3: Decimal number 10 × 11
+        32b11111111111111111111111111111100, // Multiplier test 4: -4 × 2
+        32b11111111111111111111111111111111 // Multiplier test 5: -1 × -1
+    }
+
+    const B = {
+        // Adder Test Cases (8)
+        32b00000000000000000000000000000000, // Adder test 1: Addition of Zeros
+        32b00000000000000011000010000000000, // Adder test 2: Larger Number Addition
+        32b00000000000000000000000000000001, // Adder test 3: Addition with Overflow (Positive)
+        32b11111111111111111111111111111111, // Adder test 4: Addition of Maximum Values
+        32b00000000000000000000000000000000, // Adder test 5: Subtraction of Zeros
+        32b00000000000000000000000000000100, // Adder test 6: Subtraction with Negative Result
+        32b00000000000000000000000000000001, // Adder test 7: Subtraction with Underflow
+        32b10000000000000000000000000000000, // Adder test 8: Subtraction of Minimum Values
+        
+        // Compare Test Cases (12)
+        32b10000000000000000000000000000001, // Compare test 1: Negative A and Negative B
+        32b10000000000000000000000000000001,
+        32b10000000000000000000000000000001, 
+        32b00000000000000000000000000000001, // Compare test 2: Negative A and Positive B
+        32b00000000000000000000000000000001,
+        32b00000000000000000000000000000001,
+        32b01111111111111111111111111111111, // Compare test 3: Largest Positive A and B
+        32b01111111111111111111111111111111,
+        32b01111111111111111111111111111111,
+        32b00000000000000000000000000000000, // Compare test 4: Two Zero Values
+        32b00000000000000000000000000000000,
+        32b00000000000000000000000000000000,
+        
+        // Boolean Test Cases (12)
+        32b11001100110011001100110011001100, // Boolean test 1: AND Operation
+        32b11001100110011001100110011001100, // Boolean test 2: OR Operation
+        32b01010101010101010101010101010101, // Boolean test 3: XOR Operation
+        32b10101010101010101010101010101010, // Boolean test 4: "A" Operation
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b11111111111111111111111111111111, // Boolean Edge case test 1: All Ones
+        32b01010101010101010101010101010101, // Boolean Edge case test 2: Mixed Bits
+        32b01010101010101010101010101010101, // Boolean Edge case test 2: Mixed Bits
+        32b01010101010101010101010101010101, // Boolean Edge case test 2: Mixed Bits
+        32b01010101010101010101010101010101, // Boolean Edge case test 2: Mixed Bits
+        
+        // Shifter Test Cases (9)
+        32b00000000000000000000000000000001, // Shifter test 1: Shift left by 31 bits
+        32b00000000000000000000000000000000, // Shifter test 2: Shift left by 0 bits
+        32b11111111111111111111111111111110, // Shifter test 3: All ones shifted left by 1
+        32b11011110101011011011111011101111, // Shifter test 4: Shift right by 0 bits
+        32b00000000000000000000000000000001, // Shifter test 5: Shift right by 31 bits
+        32b00000000000000001111111111111111, // Shifter test 6: Logical shift right by 16 bits
+        32b00000000000000000000000000000001, // Shifter test 7: Arithmetic right shift by 1
+        32b00111111111111111111111111111111, // Shifter test 8: Positive number shifts right by 1
+        32b11111111111111111111111111111111, // Shifter test 9: Negative stays all ones after large shift
+        
+        // Multiplier Test Cases (5)
+        32b00000000000000000000000000000000, // Multiplier test 1: 0 × anything
+        32b00000000000000000000000000000001, // Multiplier test 2: 1 × number
+        32b00000000000000000000000000000000, // Multiplier test 3: Decimal number 10 × 11
+        32b00000000000000000000000000000010, // Multiplier test 4: -4 × 2
+        32b00000000000000000000000000000001 // Multiplier test 5: -1 × -1
+    }
+    
+    const ALUFN = {
+        6b000000,  // Adder test 1 - addition
+        6b000000,  
+        6b000000, 
+        6b000000,
+        6b000001, // subtraction
+        6b000001,
+        6b000001,
+        6b000001,
+        6b110011, // Compare test 1 - cmpeq
+        6b110101, // Compare test 1 - cmplt
+        6b110111, // Compare test 1 - cmple
+        6b110011,
+        6b110101, 
+        6b110111,
+        6b110011, 
+        6b110101, 
+        6b110111,
+        6b110011,
+        6b110101,
+        6b110111,
+        6b011000, // Boolean test 1 - AND
+        6b011110, // Boolean test 2 - OR
+        6b010110, // Boolean test 3 - XOR
+        6b011010, // Boolean test 4 - "A"
+        6b011000, // Boolean edge test 1 - AND
+        6b011110, // Boolean edge test 1 - OR
+        6b010110, // Boolean edge test 1 - XOR
+        6b011010, // Boolean edge test 1 - "A"
+        6b011000, 
+        6b011110, 
+        6b010110, 
+        6b011010, 
+        6b100000, // Shifter test 1 - SHL
+        6b100000, 
+        6b100000, 
+        6b100001, // Shifter test 4 - SHR
+        6b100001, 
+        6b100001, 
+        6b100011, // Shifter test 7 - SRA
+        6b100011, 
+        
+        // Multiplier Test Cases (5)
+        6b000010, // Multiplier test 1
+        6b000010,
+        6b000010,
+        6b000010,
+        6b000010
+    }
+
+    const EXPECTED_OUT = {
+        // Adder Test Cases (8)
+        35b00000000000000000000000000000000100, // Test Case 1: Addition of Zeros 
+        35b00000000000000000110001001000000000, // Test Case 2: Larger Number Addition 
+        35b10000000000000000000000000000000011, // Test Case 3: Addition with Overflow (Positive numbers)
+        35b11111111111111111111111111111110001, // Test Case 4: Addition of Maximum Values 
+        35b00000000000000000000000000000000100, // Test Case 5: Subtraction of Zeros 
+        35b11111111111111111111111111111110001, // Test Case 6: Subtraction with Negative Result 
+        35b01111111111111111111111111111111010, // Test Case 7: Subtraction with Underflow normal 
+        35b00000000000000000000000000000000100, // Test Case 8: Subtraction of Minimum Values 
+        
+        // Compare Test Cases (12)
+        35b00000000000000000000000000000000000, // Test Case 1: Compare Negative A and Negative B where B > A (A is Maximum Negative Value) 
+        35b00000000000000000000000000000001000, 
+        35b00000000000000000000000000000001000, 
+        35b00000000000000000000000000000000000, // Test Case 2: Compare Negative A and Positive B where B>A 
+        35b00000000000000000000000000000001000, 
+        35b00000000000000000000000000000001000, 
+        35b00000000000000000000000000000001000, // Test Case 3: Compare Largest Positive A and Largest Positive B
+        35b00000000000000000000000000000000000,
+        35b00000000000000000000000000000001000,
+        35b00000000000000000000000000000001000, // Test Case 4: Compare Two Zero Values 
+        35b00000000000000000000000000000000000,
+        35b00000000000000000000000000000001000,
+        
+        // Boolean Test Cases (12)
+        35b10001000100010001000100010001000000, // Test Case 1: AND Operation (ALUFN[5:0] = 011000) 
+        35b11101110111011101110111011101110000, // Test Case 2: OR Operation (ALUFN[5:0] = 011110) 
+        35b01100110011001100110011001100110000, // Test Case 3: XOR Operation (ALUFN[5:0] = 010110) 
+        35b10101010101010101010101010101010000, // Test Case 4: "A" Operation (ALUFN[5:0] = 011010) 
+        35b11111111111111111111111111111111000, // Edge Case 1: All Ones (AND)
+        35b11111111111111111111111111111111000, // Edge Case 1: All Ones (OR)
+        35b00000000000000000000000000000000000, // Edge Case 1: All Ones (XOR)
+        35b11111111111111111111111111111111000, // Edge Case 1: All Ones ("A")
+        35b00000000000000000000000000000000000, // Edge Case 2: Mixed Bits (AND)
+        35b11111111111111111111111111111111000, // Edge Case 2: Mixed Bits (OR)
+        35b11111111111111111111111111111111000, // Edge Case 2: Mixed Bits (XOR)
+        35b10101010101010101010101010101010000, // Edge Case 2: Mixed Bits ("A")
+        
+        // Shifter Test Cases (9)
+        35b10000000000000000000000000000000000, // Test Case 1: Shift left by 31 bits 
+        35b00000000000000000000000000000001000, // Test Case 2: Shift left by 0 bits 
+        35b11111111111111111111111111111110000, // Test Case 3: All ones shifted left by 1 (loses sign) 
+        35b11011110101011011011111011101111000, // Test Case 4: Shift right by 0 bits 
+        35b00000000000000000000000000000001000, // Test Case 5: Shift right by 31 bits 
+        35b00000000000000001111111111111111000, // Test Case 6: Logical shift right by 16 bits 
+        35b11000000000000000000000000000000000, // Test Case 7: Arithmetic right shift by 1 (sign extend) 
+        35b00111111111111111111111111111111000, // Test Case 8: Positive number shifts right by 1 
+        35b11111111111111111111111111111111000, // Test Case 9: Negative stays all ones after large shift 
+        
+        // Multiplier Test Cases (5)
+        35b00000000000000000000000000000000000, // Test Case 1: 0 × anything 
+        35b00000000000000010010001101000100000, // Test Case 2: 1 × number 
+        35b00000000000000000000000001101110000, // Test Case 3: Decimal number 10 × 11 
+        35b11111111111111111111111111111000000, // Test Case 4: -4 × 2 
+        35b00000000000000000000000000000001000  // Test Case 5: -1 × -1 
+    }
+
+
+    always {
+        a = A[addr]
+        b = B[addr]
+        alufn = ALUFN[addr]
+        expected_out = EXPECTED_OUT[addr]
+    }
+}

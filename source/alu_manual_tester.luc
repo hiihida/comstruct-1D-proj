@@ -32,10 +32,8 @@ module alu_manual_tester //#(
     sig slow_clock
     
     .clk(clk) {
-        // reset_conditioner reset_cond
-        
+      
         edge_detector io_button_edge[5](#RISE(5x{{1}}), #FALL(5x{{0}}))
-        edge_detector slow_clock_edge(#RISE(1), #FALL(0))
         button_conditioner io_button_cond[5](#CLK_FREQ(5x{{CLK_FREQ}})) 
         .rst(rst) {
             
@@ -43,19 +41,16 @@ module alu_manual_tester //#(
             dff counter[SIZE]
             
             dff states[$width(States)](#INIT(States.A_LOWER16))
-            dff speed_pointer[$clog2(SIZE)](#INIT(SLOW_CLOCK_DEFAULT_SPEED)) //clog2(32) = 5
             dff current_value[SIZE](#INIT(0))
             dff current_delta[$clog2(SIZE)+1](#INIT(1)) // increment is initially 1, maxed at 32
-            //clog(32+1) = 6
-            dff slow_clock_enable(#INIT(0))
+
             
             dff reg_a[32] // register to hold 32 bit A
             dff reg_b[32] // register to hold 32 bit B
             dff reg_alufn[6]     // register for ALUFN
             
             dff display_state(#INIT(0))  // 0 = Upper 4 digits, 1 = Lower 4 digits
-            
-            // multi_decimal_renderer decimal_renderer(#SIZE(32))
+    
         }
     }
     
@@ -63,7 +58,6 @@ module alu_manual_tester //#(
     
     always {
         decimal_renderer.value = 0 // Ensure fully driven signal
-        //seg.values = {8x{4h0}} // Ensure fully driven signal
         repeat (i, 4, 0, 1) {
             seg.values[i] = 4h0;  // Assign each index a 4-bit 0
         }
@@ -75,10 +69,8 @@ module alu_manual_tester //#(
         // connect dffs 
         counter.d = counter.q + 1 // always increment
         states.d = states.q
-        speed_pointer.d = speed_pointer.q 
         current_delta.d = current_delta.q
         current_value.d = current_value.q
-        slow_clock_enable.d = slow_clock_enable.q
         
         // default alu connection
         alu.a = reg_a.q
@@ -88,19 +80,6 @@ module alu_manual_tester //#(
         led = 8h0
         io_segment = 0
         io_select = 4hF
-        
-        // signal connection
-        slow_clock = counter.q[speed_pointer.q] // pointed based on the bit of the counter 
-        
-        // this is a mux deciding whether we stop the clock or set it with certain speed 
-        case (slow_clock_enable.q){
-            0:
-                slow_clock_edge.in = 0 // always don't increment or decrement
-            1: 
-                slow_clock_edge.in =  slow_clock 
-            default:
-                slow_clock_edge.in = 0
-        }
         
         case (states.q){ //states.q is current state, states.d is next state
             States.A_LOWER16: // compute lower 16 bits of A
@@ -173,13 +152,6 @@ module alu_manual_tester //#(
                 
                 led[2:0] = c{alu.n, alu.v, alu.z} // zero, overflow, negative flag
             
-                // for debug
-                // led = c{decimal_renderer.digits[1],decimal_renderer.digits[0]}
-                //led = c{7b0, slow_clock}
-                //io_led = {c{2b0,current_delta.q},c{3b0, speed_pointer.q}, current_value.q[7:0]}// connect DIP switches to the LEDs
-                // for debug button 
-                // led[4:0] = io_button_cond.out  
-                // shows on rightmost LEDs
    
         }
     }

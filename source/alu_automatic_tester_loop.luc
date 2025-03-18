@@ -24,8 +24,6 @@ module alu_automatic_tester_loop #(
     }
     
     .clk(clk) {
-        // The reset conditioner is used to synchronize the reset signal to the FPGA
-        // clock. This ensures the entire FPGA comes out of reset at the same time.
         //reset_conditioner reset_cond
         
         edge_detector io_button_edge[5](#RISE(5x{{1}}), #FALL(5x{{0}}))
@@ -37,7 +35,7 @@ module alu_automatic_tester_loop #(
             //dff speed_pointer[$clog2(SIZE)](#INIT(SLOW_CLOCK_DEFAULT_SPEED)) //clog2(32) = 5
             dff test_counter[$clog2(TEST_CASES)](#INIT(0)); // Track test case index
             //dff slow_clock_enable(#INIT(0))
-            //dff counter[SIZE]
+            dff counter[SIZE]
         }
     }
     
@@ -47,7 +45,7 @@ module alu_automatic_tester_loop #(
         io_button_edge.in = io_button_cond.out
         
         // connect dffs 
-        //counter.d = counter.q + 1 // always increment
+        counter.d = counter.q + 1 // always increment
         states.d = states.q
         test_counter.d = test_counter.q
         //slow_clock_enable.d = slow_clock_enable.q
@@ -63,30 +61,26 @@ module alu_automatic_tester_loop #(
         test_case_index = test_counter.q // Output test case index
         //slow_clock = counter.q[speed_pointer.q] // pointed based on the bit of the counter 
         
-        if (rst) {
-            // Reset everything when rst is high
-            states.d = States.IDLE;
-            test_counter.d = 0;
-        } else {
-            case (states.q){ //states.q is current state, states.d is next state
-                States.IDLE: 
-                    if (io_button_edge.out[2]) { // if lower button is pressed
-                        states.d = States.TEST
-                    }
-                
-                States.TEST:
-                    rom.addr = test_counter.q
-                    a = rom.a
-                    b = rom.b
-                    alufn = rom.alufn
-                    expected_out = rom.expected_out
-    
-                    if (test_counter.q < TEST_CASES - 1) {
+        case (states.q){ //states.q is current state, states.d is next state
+            States.IDLE: // idle state
+                if (io_button_edge.out[2]) { // if lower button is pressed
+                    states.d = States.TEST
+                }
+            
+            States.TEST: // display on seven-seg LED & io_led
+                rom.addr = test_counter.q
+                a = rom.a
+                b = rom.b
+                alufn = rom.alufn
+                expected_out = rom.expected_out
+            
+                if (test_counter.q < TEST_CASES - 1) {
                         test_counter.d = test_counter.q + 1; // Increment test case index
-                    } else {
-                        test_counter.d = 0; // Loop back
-                    }
-            }
+                } 
+                else {
+                     test_counter.d = 0; // Loop back
+                }
         }
+
     }
 }

@@ -1,77 +1,222 @@
-module alu_test (
+// current_value is signed, but multi_decimal_renderer is not
+module alu_test #(
+    CLK_FREQ ~ 1000 : CLK_FREQ > 0) 
+(
     input clk,              // 100MHz clock
     input rst,            // reset button (active low)
-    output led[8],          // 8 user controllable LEDs
+    input io_button[5],      // 5 buttons on IO Shield
+    input io_dip[3][8],       // DIP switches on IO Shield
     output io_led[3][8],     // LEDs on IO Shield
     output io_segment[8],        // 7-segment LEDs on IO Shield
     output io_select[4],        // Digit select on IO Shield
-    input io_button[5],      // 5 buttons on IO Shield
-    input io_dip[3][8]       // DIP switches on IO Shield
-) {    
+    output led[8]    // side LEDs on the right
+) {
+    
+    //sig rst_n                 // reset signal
+    
+    
     enum States {
-        MANUAL,
-        AUTO
+        A_LOWER16,
+        A_HIGHER16,
+        B_LOWER16,
+        B_HIGHER16,
+        ALUFN,
+        DISPLAY
     }
     
-    const CLK_FREQ = $is_sim() ? 1000 : 10000000 // put 1000 for sim, 10000000 otherwise in hardware
+    const SIZE = 32 
+    const CLK_FREQ = $is_sim() ? 1000 : 10000000 // put 1000 only for sim, 10M on hardware
+    const SEVEN_SEG_DIV = $is_sim() ? 3 : 16 // put 6 for sim, 16 on hardware
+    const SLOW_CLOCK_DEFAULT_SPEED = $is_sim() ? 8 : 28 // put 8  for sim, 28 for hardware
+    
+    alu alu
+    
+    sig slow_clock
     
     .clk(clk) {
         // The reset conditioner is used to synchronize the reset signal to the FPGA
         // clock. This ensures the entire FPGA comes out of reset at the same time.
+        //reset_conditioner reset_cond
+        
         edge_detector io_button_edge[5](#RISE(5x{{1}}), #FALL(5x{{0}}))
+        edge_detector slow_clock_edge(#RISE(1), #FALL(0))
         button_conditioner io_button_cond[5](#CLK_FREQ(5x{{CLK_FREQ}})) 
         .rst(rst) {
-            dff states[$width(States)](#INIT(States.MANUAL))
+            
+            multi_seven_seg seg(#DIV(SEVEN_SEG_DIV)) 
+            dff counter[SIZE]
+            
+            dff states[$width(States)](#INIT(States.A_LOWER16))
+            dff speed_pointer[$clog2(SIZE)](#INIT(SLOW_CLOCK_DEFAULT_SPEED)) //clog2(32) = 5
+            dff current_value[SIZE](#INIT(0))
+            dff current_delta[$clog2(SIZE)+1](#INIT(1)) // increment is initially 1, maxed at 32
+            //clog(32+1) = 6
+            dff slow_clock_enable(#INIT(0))
+            
+            dff reg_a[32] // register to hold 32 bit A
+            dff reg_b[32] // register to hold 32 bit B
+            dff reg_alufn[6]     // register for ALUFN
+            
+            dff display_state(#INIT(0))  // 0 = Upper 4 digits, 1 = Lower 4 digits
+            
+            // multi_decimal_renderer decimal_renderer(#SIZE(32))
         }
     }
     
-    //alu_manual_tester alu_manual(.clk(clk), .rst(rst), .io_button(io_button), .io_dip(io_dip), #CLK_FREQ(CLK_FREQ)) 
-    alu_manual_tester alu_manual(
-        .clk(clk), 
-        .rst(rst), 
-        .io_button(io_button), 
-        .io_dip(io_dip)
-    )
-    alu_automatic_tester alu_auto(
-        .clk(clk), 
-        .rst(rst), 
-        .io_button(io_button), 
-        .io_dip(io_dip)
-    )
+    bin_to_dec decimal_renderer(#DIGITS(8), #LEADING_ZEROS(1))
     
     always {
+        decimal_renderer.value = 0 // Ensure fully driven signal
+        //seg.values = {8x{4h0}} // Ensure fully driven signal
+        repeat (i, 4, 0, 1) {
+            seg.values[i] = 4h0;  // Assign each index a 4-bit 0
+        }
+        
+        // condition the buttons, then take rising edges only
         io_button_cond.in = io_button
         io_button_edge.in = io_button_cond.out
         
-        led = 8h00             // turn LEDs off
-        
-        // defaults
+        // connect dffs 
+        counter.d = counter.q + 1 // always increment
         states.d = states.q
-        io_segment = alu_manual.io_segment
-        io_select = alu_manual.io_select         
-        io_led = alu_manual.io_led
-        led = alu_manual.led
+        speed_pointer.d = speed_pointer.q 
+        current_delta.d = current_delta.q
+        current_value.d = current_value.q
+        slow_clock_enable.d = slow_clock_enable.q
         
-        // to test ALU 
-        // **Switch between Manual & Auto Test using io_button[2]**
-        case (states.q){
-            States.MANUAL: // Default to manual mode
-                if (io_button_edge.out[2]) { // if lower button is pressed
-                    states.d = States.AUTO
-                } 
-                else {
-                    io_segment = alu_manual.io_segment
-                    io_select = alu_manual.io_select         
-                    io_led = alu_manual.io_led
-                    led = alu_manual.led
+        // default alu connection
+        alu.a = reg_a.q
+        alu.b = reg_b.q
+        alu.alufn = reg_alufn.q
+        io_led = 3x{{8h0}}
+        led = 8h0
+        io_segment = 0
+        io_select = 4hF
+        
+        // signal connection
+        slow_clock = counter.q[speed_pointer.q] // pointed based on the bit of the counter 
+        
+        // this is a mux deciding whether we stop the clock or set it with certain speed 
+        case (slow_clock_enable.q){
+            0:
+                slow_clock_edge.in = 0 // always don't increment or decrement
+            1: 
+                slow_clock_edge.in =  slow_clock 
+            default:
+                slow_clock_edge.in = 0
+        }
+        
+        case (states.q){ //states.q is current state, states.d is next state
+            States.A_LOWER16: // compute lower 16 bits of A
+                io_led[2] = io_dip[2]
+                io_led[1] = io_dip[1]
+                if (io_button_edge.out[1]) { // if button 1 (center) is pressed
+                    reg_a.d[7:0] = io_dip[1] // bits 0-7
+                    reg_a.d[15:8] = io_dip[2] // bits 8-15
+                    states.d = States.A_HIGHER16
+                }
+            States.A_HIGHER16: // compute higher 16 bits of A
+                io_led[2] = io_dip[2]
+                io_led[1] = io_dip[1]
+                if (io_button_edge.out[1]) { // if button 1 (center) is pressed
+                    reg_a.d[23:16] = io_dip[1] // bits 16-23
+                    reg_a.d[31:24] = io_dip[2] // bits 24-31
+                    states.d = States.B_LOWER16
+                }
+            States.B_LOWER16: // compute lower 16 bits of B
+                io_led[2] = io_dip[2]
+                io_led[1] = io_dip[1]
+                if (io_button_edge.out[1]) { // if button 1 (center) is pressed
+                    reg_b.d[7:0] = io_dip[1] // bits 0-7
+                    reg_b.d[15:8] = io_dip[2] // bits 8-15
+                    states.d = States.B_HIGHER16
+                }
+            States.B_HIGHER16: // compute higher 16 bits of B
+                io_led[2] = io_dip[2]
+                io_led[1] = io_dip[1]
+                if (io_button_edge.out[1]) { // if button 1 (center) is pressed
+                    reg_b.d[23:16] = io_dip[1] // bits 16-23
+                    reg_b.d[31:24] = io_dip[2] // bits 24-31
+                    states.d = States.ALUFN
+                }
+            States.ALUFN: // compute A and B
+                reg_alufn.d = io_dip[0][5:0] // 000000 if add, 000001 if subtract
+                alu.a = reg_a.q
+                alu.b = reg_b.q
+                alu.alufn = reg_alufn.q
+                states.d = States.DISPLAY
+            
+            States.DISPLAY: // display on seven-seg LED & io_led
+                // --------------------------------------------
+                // ADDER
+                // --------------------------------------------
+                decimal_renderer.value = alu.out
+                // Default: Show lower half of out
+                seg.values = decimal_renderer.digits[3:0]  // lower 4 digits
+                // lower 16 bits
+                io_led[2] = alu.out[15:8]
+                io_led[1] = alu.out[7:0]
+            
+                // Toggle based on button presses
+                if (io_button_edge.out[4]) { // right button
+                    display_state.d = 1  // Show upper 4 digits
+                }
+                else if (io_button_edge.out[3]) { // left button
+                    display_state.d = 0  // Show lower 4 digits
+                }
+                else if (io_button_edge.out[0]) { // top button, reset
+                    states.d = States.A_LOWER16
                 }
             
-            States.AUTO: // display on seven-seg LED & io_led
-                if (io_button_edge.out[2]) { // if lower button is pressed
-                    states.d = States.MANUAL
+                // Update display based on state
+                if (display_state.q == 1) { // upper half of out
+                    seg.values = decimal_renderer.digits[7:4]  // higher 4 digits
+                    // upper 16 bits
+                    io_led[2] = alu.out[31:24]
+                    io_led[1] = alu.out[23:16]
+                    led[7] = display_state.q
                 }
-                io_led = alu_auto.io_led
-                led = alu_auto.led
-        } 
+
+                io_segment = ~seg.seg
+                io_select = ~seg.sel
+                //if ((alu.v | alu.n) != 1) { // if no overflow/negative occurs, show seven seg LED
+                    //io_segment = ~seg.seg
+                    //io_select = ~seg.sel
+                //} 
+                
+                // for debug
+                // led = c{decimal_renderer.digits[1],decimal_renderer.digits[0]}
+                // for debug 
+                //led = c{7b0, slow_clock}
+                //io_led = {c{2b0,current_delta.q},c{3b0, speed_pointer.q}, current_value.q[7:0]}// connect DIP switches to the LEDs
+                // for debug button 
+                // led[4:0] = io_button_cond.out  
+                // shows on rightmost LEDs
+                led[2:0] = c{alu.n, alu.v, alu.z}
+                io_led[0][0] = alu.z  // Zero flag
+                io_led[0][1] = alu.v  // Overflow flag
+                io_led[0][2] = alu.n  // Negative flag
+            
+                // --------------------------------------------
+                // COMPARE
+                // --------------------------------------------
+                led[3] = alu.cmp_out[0]
+            
+            
+                // --------------------------------------------
+                // BOOLEAN
+                // --------------------------------------------
+            
+            
+                // --------------------------------------------
+                // SHIFTER
+                // --------------------------------------------
+            
+            
+                // --------------------------------------------
+                // MULTIPLIER
+                // --------------------------------------------
+   
+        }
     }
 }

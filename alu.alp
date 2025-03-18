@@ -158,23 +158,7 @@
             {
                 "file": {
                     "type": "DiskFile",
-<<<<<<< HEAD
-                    "path": "source/alu_automatic_tester_rom.luc"
-                }
-            },
-            {
-                "file": {
-                    "type": "DiskFile",
-                    "path": "source/alu_automatic_tester_loop.luc"
-                }
-            },
-            {
-                "file": {
-                    "type": "DiskFile",
-                    "path": "source/alu_automatic_tester.luc"
-=======
                     "path": "source/rotater.luc"
->>>>>>> 9b6d899ba67a7b701e235fc5ad962c8710c00761
                 }
             },
             {
@@ -191,19 +175,32 @@
             },
             {
                 "file": {
-<<<<<<< HEAD
-                    "type": "DiskFile",
-                    "path": "source/rotater.luc"
+                    "type": "Component",
+                    "path": "Miscellaneous/counter.luc"
                 }
             },
             {
                 "file": {
                     "type": "DiskFile",
-                    "path": "source/alu_test.luc"
-=======
-                    "type": "Component",
-                    "path": "Miscellaneous/counter.luc"
->>>>>>> 9b6d899ba67a7b701e235fc5ad962c8710c00761
+                    "path": "source/left_r.luc"
+                }
+            },
+            {
+                "file": {
+                    "type": "DiskFile",
+                    "path": "source/alu_automatic_tester_loop.luc"
+                }
+            },
+            {
+                "file": {
+                    "type": "DiskFile",
+                    "path": "source/alu_automatic_tester.luc"
+                }
+            },
+            {
+                "file": {
+                    "type": "DiskFile",
+                    "path": "source/alu_automatic_tester_rom.luc"
                 }
             }
         ],

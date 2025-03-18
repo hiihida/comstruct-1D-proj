@@ -6,7 +6,7 @@ module rotater #(
     input alufn[6],
     output result[SIZE]
 ) {
-    left_rotater rotl
+    left_r rotl
     right_rotater rotr
     always {
         rotl.a = a

@@ -12,11 +12,7 @@ module alu (
     boolean boolean
     shifter shifter
     multiplier multiplier
-<<<<<<< HEAD
-    rotater rotater
-=======
     rotater rotater  
->>>>>>> 9b6d899ba67a7b701e235fc5ad962c8710c00761
   
     always {
         // Set up the adder, comparator, boolean, shifter, multiplier and rotater modules
@@ -69,6 +65,5 @@ module alu (
           default:
             out = adder.out
         }
-
     }
 }
